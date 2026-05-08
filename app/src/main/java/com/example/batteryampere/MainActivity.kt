@@ -1,8 +1,5 @@
 package com.example.batteryampere
 
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -23,26 +20,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.window.core.layout.WindowWidthSizeClass
 import com.example.batteryampere.ui.theme.BatteryAmpereTheme
-import kotlinx.coroutines.delay
-import kotlin.math.*
-
-data class BatteryState(
-    val currentMA: Int = 0,
-    val voltageV: Float = 0f,
-    val level: Int = 0,
-    val temperature: Float = 0f,
-    val status: Int = BatteryManager.BATTERY_STATUS_UNKNOWN,
-    val isCharging: Boolean = false,
-    val pluggedSource: String = "Battery",
-    val technology: String = "Unknown"
-)
+import kotlin.math.abs
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,57 +46,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun BatteryScreen(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val batteryManager = remember { context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager }
-    
-    var batteryState by remember { mutableStateOf(BatteryState()) }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-            
-            val currentNow = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
-            val processedCurrent = if (abs(currentNow) > 10000) currentNow / 1000 else currentNow
-            
-            val voltageMV = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
-            val voltageV = voltageMV / 1000f
-            
-            val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-            val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-            val batteryPct = if (level != -1 && scale != -1) (level * 100 / scale) else 0
-            
-            val tempDC = (intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0) / 10f
-            val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN) 
-                ?: BatteryManager.BATTERY_STATUS_UNKNOWN
-            
-            val plugged = intent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1) ?: -1
-            val pluggedSource = when (plugged) {
-                BatteryManager.BATTERY_PLUGGED_AC -> "AC"
-                BatteryManager.BATTERY_PLUGGED_USB -> "USB"
-                BatteryManager.BATTERY_PLUGGED_WIRELESS -> "Wireless"
-                else -> "Battery"
-            }
-            
-            val technology = intent?.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY) ?: "Unknown"
-            
-            val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || 
-                             status == BatteryManager.BATTERY_STATUS_FULL
-
-            batteryState = BatteryState(
-                currentMA = processedCurrent,
-                voltageV = voltageV,
-                level = batteryPct,
-                temperature = tempDC,
-                status = status,
-                isCharging = isCharging,
-                pluggedSource = pluggedSource,
-                technology = technology
-            )
-            
-            delay(1000)
-        }
-    }
-
+    val viewModel: BatteryViewModel = viewModel()
+    val batteryState by viewModel.batteryState.collectAsStateWithLifecycle()
     BatteryContent(batteryState = batteryState, modifier = modifier)
 }
 
