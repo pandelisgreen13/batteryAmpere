@@ -12,14 +12,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -51,18 +53,17 @@ fun BatteryScreen(modifier: Modifier = Modifier) {
     BatteryContent(batteryState = batteryState, modifier = modifier)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 fun BatteryContent(batteryState: BatteryState, modifier: Modifier = Modifier) {
     val adaptiveInfo = currentWindowAdaptiveInfo()
     val isExpanded = adaptiveInfo.windowSizeClass.windowWidthSizeClass == WindowWidthSizeClass.EXPANDED
-    
+
     Surface(
         modifier = modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
         if (isExpanded) {
-            // Tablet / Desktop Layout: Side-by-side
             Row(
                 modifier = Modifier
                     .fillMaxSize()
@@ -77,28 +78,23 @@ fun BatteryContent(batteryState: BatteryState, modifier: Modifier = Modifier) {
                     AmperageGauge(
                         currentMA = batteryState.currentMA,
                         isCharging = batteryState.isCharging,
+                        isExpanded = true,
                         modifier = Modifier.size(400.dp)
                     )
                 }
-                
+
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
-                    Text(
-                        text = "Battery Ampere",
-                        style = MaterialTheme.typography.displayMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    AppTitle(style = MaterialTheme.typography.displayMedium)
                     ChargingStatusCard(batteryState)
                     MetricsGrid(batteryState)
                 }
             }
         } else {
-            // Mobile Layout: Vertical
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -107,21 +103,16 @@ fun BatteryContent(batteryState: BatteryState, modifier: Modifier = Modifier) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                Text(
-                    text = "Battery Ampere",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                AppTitle(style = MaterialTheme.typography.headlineMedium)
 
                 AmperageGauge(
                     currentMA = batteryState.currentMA,
                     isCharging = batteryState.isCharging,
+                    isExpanded = false,
                     modifier = Modifier.size(280.dp)
                 )
 
                 ChargingStatusCard(batteryState)
-
                 MetricsGrid(batteryState)
             }
         }
@@ -129,15 +120,31 @@ fun BatteryContent(batteryState: BatteryState, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun AmperageGauge(currentMA: Int, isCharging: Boolean, modifier: Modifier = Modifier) {
+private fun AppTitle(style: TextStyle, modifier: Modifier = Modifier) {
+    Text(
+        text = "Battery Ampere",
+        style = style,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = modifier
+    )
+}
+
+@Composable
+fun AmperageGauge(
+    currentMA: Int,
+    isCharging: Boolean,
+    isExpanded: Boolean = false,
+    modifier: Modifier = Modifier
+) {
     val primaryColor = if (isCharging) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-    val secondaryColor = if (isCharging) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer
-    
+    val trackColor = if (isCharging) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer
+
     val maxMA = 5000f
     val clampedMA = currentMA.toFloat().coerceIn(-maxMA, maxMA)
     val sweepAngle = 240f
     val startAngle = 150f
-    
+
     val progress = (clampedMA + maxMA) / (2 * maxMA)
     val currentAngle = sweepAngle * progress
 
@@ -145,19 +152,14 @@ fun AmperageGauge(currentMA: Int, isCharging: Boolean, modifier: Modifier = Modi
         Canvas(modifier = Modifier.fillMaxSize()) {
             val strokeWidth = size.width * 0.08f
             drawArc(
-                color = secondaryColor.copy(alpha = 0.3f),
+                color = trackColor.copy(alpha = 0.3f),
                 startAngle = startAngle,
                 sweepAngle = sweepAngle,
                 useCenter = false,
                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
             )
-
             drawArc(
-                brush = Brush.sweepGradient(
-                    0f to secondaryColor,
-                    0.5f to primaryColor,
-                    1f to primaryColor
-                ),
+                color = primaryColor,
                 startAngle = startAngle,
                 sweepAngle = currentAngle,
                 useCenter = false,
@@ -169,7 +171,7 @@ fun AmperageGauge(currentMA: Int, isCharging: Boolean, modifier: Modifier = Modi
             Text(
                 text = "${abs(currentMA)}",
                 style = MaterialTheme.typography.displayLarge.copy(
-                    fontSize = if (modifier.toString().contains("400")) 80.sp else 56.sp
+                    fontSize = if (isExpanded) 80.sp else 56.sp
                 ),
                 fontWeight = FontWeight.ExtraBold,
                 color = primaryColor
@@ -185,9 +187,25 @@ fun AmperageGauge(currentMA: Int, isCharging: Boolean, modifier: Modifier = Modi
 
 @Composable
 fun ChargingStatusCard(state: BatteryState) {
-    val containerColor = if (state.isCharging) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-    val contentColor = if (state.isCharging) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-    
+    val isPluggedIn = state.pluggedSource != "Battery"
+    val displayStatus = when {
+        state.isCharging -> if (state.level >= 100) "Full" else "Charging"
+        isPluggedIn -> "Not Charging"
+        else -> "Discharging"
+    }
+    val displaySubtext = when {
+        state.isCharging || isPluggedIn -> "Source: ${state.pluggedSource}"
+        else -> "On Battery Power"
+    }
+    val containerColor = if (state.isCharging || isPluggedIn)
+        MaterialTheme.colorScheme.primaryContainer
+    else
+        MaterialTheme.colorScheme.surfaceVariant
+    val contentColor = if (state.isCharging || isPluggedIn)
+        MaterialTheme.colorScheme.onPrimaryContainer
+    else
+        MaterialTheme.colorScheme.onSurfaceVariant
+
     Card(
         colors = CardDefaults.cardColors(containerColor = containerColor, contentColor = contentColor),
         shape = MaterialTheme.shapes.extraLarge,
@@ -203,18 +221,18 @@ fun ChargingStatusCard(state: BatteryState) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                 Icon(
                     imageVector = if (state.isCharging) Icons.Rounded.Bolt else Icons.Rounded.BatteryStd,
-                    contentDescription = null,
+                    contentDescription = displayStatus,
                     modifier = Modifier.size(32.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = if (state.isCharging) "Charging" else "Discharging",
+                        text = displayStatus,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = if (state.isCharging) "Source: ${state.pluggedSource}" else "On Battery Power",
+                        text = displaySubtext,
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -230,6 +248,8 @@ fun ChargingStatusCard(state: BatteryState) {
 
 @Composable
 fun MetricsGrid(state: BatteryState) {
+    val wattsW = state.voltageV * abs(state.currentMA) / 1000f
+
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             MetricCard(
@@ -242,6 +262,7 @@ fun MetricsGrid(state: BatteryState) {
                 label = "Temperature",
                 value = "${state.temperature} °C",
                 icon = Icons.Rounded.Thermostat,
+                iconTint = temperatureColor(state.temperature),
                 modifier = Modifier.weight(1f)
             )
         }
@@ -259,11 +280,31 @@ fun MetricsGrid(state: BatteryState) {
                 modifier = Modifier.weight(1f)
             )
         }
+        MetricCard(
+            label = "Power",
+            value = "${"%.1f".format(wattsW)} W",
+            icon = Icons.Rounded.Bolt,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
 @Composable
-fun MetricCard(label: String, value: String, icon: ImageVector, modifier: Modifier = Modifier) {
+private fun temperatureColor(temp: Float): Color = when {
+    temp >= 45f -> MaterialTheme.colorScheme.error
+    temp >= 38f -> MaterialTheme.colorScheme.tertiary
+    else -> MaterialTheme.colorScheme.primary
+}
+
+@Composable
+fun MetricCard(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    iconTint: Color = Color.Unspecified
+) {
+    val resolvedTint = if (iconTint == Color.Unspecified) MaterialTheme.colorScheme.primary else iconTint
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -273,7 +314,7 @@ fun MetricCard(label: String, value: String, icon: ImageVector, modifier: Modifi
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = resolvedTint,
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.height(8.dp))
